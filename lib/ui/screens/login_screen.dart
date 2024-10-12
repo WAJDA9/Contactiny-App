@@ -3,9 +3,11 @@ import 'package:tpmobile/const/assets.dart';
 import 'package:tpmobile/const/colors.dart';
 import 'package:tpmobile/const/text.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:tpmobile/services/database.dart';
 import 'package:tpmobile/ui/screens/home_screen.dart';
 import 'package:tpmobile/ui/widgets/Buttons/button_widget.dart';
 import 'package:tpmobile/ui/widgets/fields/input_field_widget.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
-  void validateForm() {
+  void validateForm() async {
     setState(() {
       _emailError = validateEmail(emailController.text);
       _passwordError = validatePassword(passwordController.text);
@@ -56,10 +58,34 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (_emailError == null && _passwordError == null) {
       // Form is valid, proceed with login
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => HomeScreen())
+      bool loginSuccess = await loginUser(emailController.text, passwordController.text);
+      if (loginSuccess) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => HomeScreen())
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text("Error login in check creds"))
+        );
+      }
+    }
+  }
+
+  Future<bool> loginUser(String email, String password) async {
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final results = await db.query(
+        'users',
+        where: 'email = ? AND password = ?',
+        whereArgs: [email, password],
       );
+      return results.isNotEmpty;
+    } catch (e) {
+      print("Error during login: $e");
+      return false;
     }
   }
 
@@ -132,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Text(
                               'Forgot password',
                               style: AppTextStyle.infoText.copyWith(
-                                fontSize: 14.sp,
+                                fontSize: 12.sp,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.primaryColor,
                               ),
