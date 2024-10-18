@@ -50,7 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
-  void validateForm() async {
+  Future<void> validateForm() async {
     setState(() {
       _emailError = validateEmail(emailController.text);
       _passwordError = validatePassword(passwordController.text);
@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: Colors.red,
-            content: Text("Error login in check creds"))
+            content: Text("Error logging in. Please check your credentials."))
         );
       }
     }
@@ -76,19 +76,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<bool> loginUser(String email, String password) async {
     try {
-      final db = await DatabaseHelper.instance.database;
-      final results = await db.query(
-        'users',
-        where: 'email = ? AND password = ?',
-        whereArgs: [email, password],
-      );
-      return results.isNotEmpty;
+      return DatabaseHelper.instance.authenticateUser(email, password);
     } catch (e) {
       print("Error during login: $e");
       return false;
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -171,7 +164,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: double.infinity,
                         child: ButtonWidget(
                           buttonText: "Sign in",
-                          onClick: validateForm,
+                          onClick:(){
+                            validateForm();
+                          } ,
                         ),
                       ),
                     ],

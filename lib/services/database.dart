@@ -13,11 +13,7 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   Future<Database> get database async {
-   print("hello");
-    if (_database != null){
-      
-return _database!;
-    } 
+    if (_database != null) return _database!;
     _database = await _initDB('app_database.db');
     return _database!;
   }
@@ -25,12 +21,17 @@ return _database!;
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+
+    return await openDatabase(
+      path,
+      version: 1,
+      onCreate: _createDB,
+    );
   }
 
   Future<void> _createDB(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE users(
+      CREATE TABLE IF NOT EXISTS users(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE,
         password TEXT,
@@ -38,34 +39,38 @@ return _database!;
       )
     ''');
     await db.execute('''
-      CREATE TABLE contacts(
+      CREATE TABLE IF NOT EXISTS contacts(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         pseudoName TEXT,
         phoneNumber TEXT
       )
     ''');
-    
-    await createUser("wajdi@gmail.com", "wajdi123", "wajda9");
-    
   }
-  Future<void> createInitialUserIfNotExists() async {
-    final db = await database;
-    final existingUser = await db.query(
-      'users',
-      where: 'email = ?',
-      whereArgs: ['wajdi@g.com'],
-    );
 
-    if (existingUser.isEmpty) {
-      await createUser('wajdi@g.com', '12345678', 'Initial User');
+  Future<void> createInitialUserIfNotExists() async {
+    try {
+      final db = await database;
+      final existingUser = await db.query(
+        'users',
+        where: 'email = ?',
+        whereArgs: ['wajdi@gmail.com'],
+      );
+
+      if (existingUser.isEmpty) {
+        await createUser('wajdi@gmail.com', 'wajdi123', 'wajda9');
+      }
+    } catch (e) {
+      print("Error creating initial user: $e");
     }
   }
 
   Future<bool> createUser(String email, String password, String name) async {
-    final db = await database;
-    final hashedPassword = _hashPassword(password);
     try {
+      final db = await database;
+      if (db == null) return false;
+
+      final hashedPassword = _hashPassword(password);
       await db.insert('users', {
         'email': email,
         'password': hashedPassword,
@@ -79,36 +84,61 @@ return _database!;
   }
 
   Future<bool> authenticateUser(String email, String password) async {
-    final db = await database;
-    final hashedPassword = _hashPassword(password);
-    final results = await db.query(
-      'users',
-      where: 'email = ? AND password = ?',
-      whereArgs: [email, hashedPassword],
-    );
-    return results.isNotEmpty;
+    try {
+      final db = await database;
+      if (db == null) return false;
+
+      final hashedPassword = _hashPassword(password);
+      final results = await db.query(
+        'users',
+        where: 'email = ? AND password = ?',
+        whereArgs: [email, hashedPassword],
+      );
+      return results.isNotEmpty;
+    } catch (e) {
+      print("Error during authentication: $e");
+      return false;
+    }
   }
 
   Future<void> setLoggedInUser(String email, bool rememberMe) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('logged_in_user', email);
-    await prefs.setBool('remember_me', rememberMe);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('logged_in_user', email);
+      await prefs.setBool('remember_me', rememberMe);
+    } catch (e) {
+      print("Error setting logged in user: $e");
+    }
   }
 
   Future<String?> getLoggedInUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('logged_in_user');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('logged_in_user');
+    } catch (e) {
+      print("Error getting logged in user: $e");
+      return null;
+    }
   }
 
   Future<bool> isRememberMeChecked() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('remember_me') ?? false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool('remember_me') ?? false;
+    } catch (e) {
+      print("Error checking remember me: $e");
+      return false;
+    }
   }
 
   Future<void> logoutUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('logged_in_user');
-    await prefs.remove('remember_me');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('logged_in_user');
+      await prefs.remove('remember_me');
+    } catch (e) {
+      print("Error logging out user: $e");
+    }
   }
 
   String _hashPassword(String password) {
@@ -116,33 +146,105 @@ return _database!;
     var digest = sha256.convert(bytes);
     return digest.toString();
   }
+
+  // Contact CRUD operations
   Future<int> insertContact(Contact contact) async {
-    final db = await database;
-    return await db.insert('contacts', contact.toMap());
+    try {
+      final db = await database;
+      if (db == null) return -1;
+      return await db.insert('contacts', contact.toMap());
+    } catch (e) {
+      print("Error inserting contact: $e");
+      return -1;
+    }
   }
 
   Future<List<Contact>> getContacts() async {
-    final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('contacts');
-    return List.generate(maps.length, (i) => Contact.fromMap(maps[i]));
+    try {
+      final db = await database;
+      if (db == null) return [];
+      final List<Map<String, dynamic>> maps = await db.query('contacts');
+      return List.generate(maps.length, (i) => Contact.fromMap(maps[i]));
+    } catch (e) {
+      print("Error getting contacts: $e");
+      return [];
+    }
   }
 
   Future<int> updateContact(Contact contact) async {
-    final db = await database;
-    return await db.update(
-      'contacts',
-      contact.toMap(),
-      where: 'id = ?',
-      whereArgs: [contact.id],
-    );
+    try {
+      final db = await database;
+      if (db == null) return 0;
+      return await db.update(
+        'contacts',
+        contact.toMap(),
+        where: 'id = ?',
+        whereArgs: [contact.id],
+      );
+    } catch (e) {
+      print("Error updating contact: $e");
+      return 0;
+    }
   }
 
   Future<int> deleteContact(int id) async {
-    final db = await database;
-    return await db.delete(
-      'contacts',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    try {
+      final db = await database;
+      if (db == null) return 0;
+      return await db.delete(
+        'contacts',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      print("Error deleting contact: $e");
+      return 0;
+    }
+  }
+
+  // User operations
+  // Future<User?> getUserByEmail(String email) async {
+  //   try {
+  //     final db = await database;
+  //     if (db == null) return null;
+  //     final results = await db.query(
+  //       'users',
+  //       where: 'email = ?',
+  //       whereArgs: [email],
+  //     );
+  //     if (results.isNotEmpty) {
+  //       return User.fromMap(results.first);
+  //     }
+  //     return null;
+  //   } catch (e) {
+  //     print("Error getting user by email: $e");
+  //     return null;
+  //   }
+  // }
+
+  // Future<int> updateUser(User user) async {
+  //   try {
+  //     final db = await database;
+  //     if (db == null) return 0;
+  //     return await db.update(
+  //       'users',
+  //       user.toMap(),
+  //       where: 'id = ?',
+  //       whereArgs: [user.id],
+  //     );
+  //   } catch (e) {
+  //     print("Error updating user: $e");
+  //     return 0;
+  //   }
+  // }
+
+  Future<void> initializeDatabase() async {
+    try {
+      final db = await database;
+      await createInitialUserIfNotExists();
+      print("Database initialized successfully");
+    } catch (e) {
+      print("Error during database initialization: $e");
+    }
   }
 }
